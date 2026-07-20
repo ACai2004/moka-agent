@@ -643,6 +643,11 @@ public interface ConversationPlannerAgent {
         2. 不要指定具体的台词
         3. 方向是框架性的，不是时间线顺序
         4. Hooks 是自然切入点，不是待办清单
+        5. 根据菜品的 dishRole 决定交流参与程度：
+           - SIGNATURE + MAIN：用户表现出兴趣时可以深入聊
+           - STAPLE + DESSERT：自然流动时提及
+           - SIDE + CONDIMENT：不主动提及，用户说到再跟
+           - DRINK：普通饮品不提，特色饮品可一带而过
         """)
     ConversationPlan plan(
         @V("order") OrderData order,
