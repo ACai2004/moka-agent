@@ -12,16 +12,16 @@
 
 | 用途 | 模型 | 提供商 | 备注 |
 |---|---|---|---|
-| 文本推理（ExperienceUnderstanding / ConversationPlanner） | `deepseek-v4` | OpenRouter | 通过 OpenRouter 统一 API 调用 |
-| 视觉解析（OrderUnderstanding：小票照片→结构化数据） | `qwen3.6-plus` | OpenRouter | 使用 Qwen3.6-plus 的多模态视觉能力解析小票照片 |
-| Embedding（DishRetriever 的语义匹配） | `text-embedding-3-small` | OpenRouter | MVP 精确匹配为主，embedding 做 fallback；未来可升级到 `bge-m3` |
+| 文本推理（ExperienceUnderstanding / ConversationPlanner） | `deepseek-v4` | DeepSeek（直连） | 直接调用 DeepSeek API，不经 OpenRouter |
+| 视觉解析（OrderUnderstanding：小票照片→结构化数据） | `qwen3.6-plus` | OpenRouter | 视觉模型走 OpenRouter |
+| Embedding | 不需要 | — | DishRetriever 使用精确匹配（HashMap），无需 Embedding |
 
-**OpenRouter 配置要素**：
-- API Endpoint: `https://openrouter.ai/api/v1/chat/completions`
-- API Key: 在 `application.yml` 中配置为 `${OPENROUTER_API_KEY}`
-- 文本模型: `deepseek-v4`
-- 视觉模型: `qwen3.6-plus`
-- Embedding 模型: `text-embedding-3-small`（通过 OpenRouter 调用），未来可升级为 `bge-m3`（BAAI 本地部署）
+**API 配置**（双模型独立配置）：
+
+| 服务 | base URL | API Key |
+|---|---|---|
+| DeepSeek（文本） | `https://api.deepseek.com` | `${DEEPSEEK_API_KEY}` |
+| OpenRouter（视觉） | `https://openrouter.ai/api/v1` | `${OPENROUTER_API_KEY}` |
 
 ### D2: 模块包结构
 
@@ -92,15 +92,16 @@ src/main/resources/data/sample-dish-knowledge.json
 | 本地开发 Workflow | 用一个 `MockLlmService` 开关，返回预设的结构化数据 |
 | 集成测试 | 调用真实 OpenRouter API（需配置 API Key） |
 
-`application-dev.yml` 中配置 `moka.llm.mock=true` 时启用 Mock，`false` 时调用真实 API。
+`application-dev.yml` 中配置 `moka.llm.mock=true` 时启用 Mock，`false` 时调用真实 API（DeepSeek 文本 + OpenRouter 视觉）。
 
 ### D5: 本地依赖环境
 
 | 依赖 | 方式 | 备注 |
 |---|---|---|
-| MySQL 或 PostgreSQL | Docker (`docker-compose.yml`) | MVP 建议 PostgreSQL（与 LangChain4j PGVector 兼容性更好） |
+| PostgreSQL | Docker (`docker-compose.yml`) | 业务数据存储 |
 | Redis | Docker (`docker-compose.yml`) | 缓存 / 会话管理 |
-| OpenRouter API | 外部服务 | 需要注册账号获取 API Key |
+| DeepSeek API | 外部服务 | 文本推理模型 |
+| OpenRouter API | 外部服务 | 视觉模型（小票解析） |
 
 ---
 
@@ -164,26 +165,19 @@ spring:
     username: moka
     password: ${DB_PASSWORD}
 
-langchain4j:
-  open-ai:
-    chat-model:
-      base-url: https://openrouter.ai/api/v1
-      api-key: ${OPENROUTER_API_KEY}
-      model-name: deepseek-v4        # 文本推理模型
-      temperature: 0.7
-    # 视觉模型（用于 OrderUnderstandingAgent 解析小票照片）
-    streaming-chat-model:
-      base-url: https://openrouter.ai/api/v1
-      api-key: ${OPENROUTER_API_KEY}
-      model-name: qwen3.6-plus      # 多模态视觉模型
-
 moka:
   llm:
     mock: true   # 开发阶段默认为 true
+
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY}
+    base-url: https://api.deepseek.com
+    text-model: deepseek-v4
+
   openrouter:
     api-key: ${OPENROUTER_API_KEY}
-    text-model: deepseek-v4
-    vision-model: qwen3.6-plus       # 用于订单照片解析
+    base-url: https://openrouter.ai/api/v1
+    vision-model: qwen3.6-plus
 ```
 
 #### 步骤 0.4：创建 docker-compose.yml
@@ -456,13 +450,12 @@ src/main/resources/data/sample-dish-knowledge.json
 ```java
 @Component
 public class DishRetriever {
-    // MVP 策略：精确匹配（HashMap）为主 + Embedding fallback
-    // 1. 先用菜品名做精确匹配（覆盖大部分场景）
-    // 2. 精确匹配不到的，走 text-embedding-3-small 语义搜索
-    // 3. 未来数据量增大后切换到 pgvector 全量检索
+    // MVP 策略：精确匹配（HashMap），无需 Embedding
+    // 1. 先用菜品名做精确匹配（O(1) 查找，覆盖所有场景）
+    // 2. 匹配不到的菜品返回空（不阻塞下游）
     
     public List<DishKnowledge> retrieve(List<String> dishNames) {
-        // 根据菜品名匹配知识库
+        // 根据菜品名精确匹配知识库
         // 未匹配到的菜品返回空（不报错）
     }
 }

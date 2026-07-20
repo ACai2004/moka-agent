@@ -310,9 +310,10 @@ Planner 的作用是告诉模型："这些信息只是记忆锚点，不要主�
 ### 7.1 技术选型
 
 - **采用 RAG 方案**（菜品数量多，信息结构多样）
-- MVP 阶段：不必上向量数据库
-  - 菜品几百量级时：内存加载 + Embedding 比较即可
-  - 量级上万后：考虑 PGVector 或专用向量数据库
+- MVP 阶段：不上向量数据库，不引入 Embedding 模型
+  - DishRetriever 通过精确匹配（HashMap）实现 O(1) 查找
+  - 菜品几百倍甚至几千倍时，精确匹配仍然足够
+  - 原因：输入是准确的菜名（从小票提取），不是自然语言搜索
 
 ### 7.2 知识内容
 
@@ -334,7 +335,7 @@ Planner 的作用是告诉模型："这些信息只是记忆锚点，不要主�
 | 数据类型 | 存储方式 | 原因 |
 |---|---|---|
 | 餐厅 Profile | 结构化数据库 | 信息稳定，字段固定 |
-| 菜品知识 | RAG / 向量检索 | 菜品多，信息维度多样 |
+| 菜品知识 | JSON 文件 / 结构化数据库 | 菜品名精确匹配，无需向量检索 |
 
 ---
 
@@ -498,7 +499,7 @@ LangChain4j 被当作 **AI SDK** 使用，不是 Workflow 框架：
 |---|---|
 | Agent 声明式定义 | `@AiService` 接口 + `@SystemPrompt` / `@V` |
 | 结构化 LLM 输出 | `@AiService` 接口方法返回 POJO / Record |
-| 菜品 RAG | `ContentRetriever` + `DocumentSplitter` + `EmbeddingStore` |
+| 菜品精确匹配 | 自实现 HashMap 查找，不依赖 LangChain4j（无需 Embedding） |
 | 实时信息获取 | `@Tool` 注解定义 Tool |
 | Workflow 编排 | **不用 LangChain4j Chain**，自己实现 |
 
