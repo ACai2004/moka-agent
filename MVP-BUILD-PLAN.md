@@ -226,15 +226,51 @@ mvn spring-boot:run
 
 | 类名 | 字段 | 用途 |
 |---|---|---|
-| `OrderData` | `restaurant, time, people, dishes, duration` | 订单解析结果（第 9.2 节） |
+| `OrderData` | `restaurant, time, people, items, duration` | 订单解析结果（第 9.2 节） |
+| `DishItem` | `name, quantity, spiceLevel, notes, category, price` | 单道菜品的完整信息（数量、辣度、备注等） |
 | `RestaurantProfile` | `restaurantName, positioning, experienceTags, environmentFeatures, serviceFeatures` | 餐厅信息（第 9.1 节） |
 | `DishKnowledge` | `dishName, features, experienceTags` | 菜品知识（第 9.3 节） |
 | `RealtimeInfo` | `weather, holiday, traffic, currentTime` | 实时信息（第 8 节） |
 
 **注意事项**：
 - 所有类使用 Java `record` 或 `@Data`（Lombok）
-- `OrderData.dishes` 类型为 `List<String>`
+- `OrderData.items` 类型为 `List<DishItem>`，保留小票原始细节（不压缩为纯菜名列表）
+- `DishItem` 中 `quantity` 默认 1，其余可选字段保留 `null` 语义（小票没写就是 null）
 - `RealtimeInfo` 中的字段 MVP 阶段可为 `String` 类型，不强求结构化
+
+**DishItem 定义示例**：
+
+```java
+public record DishItem(
+    String name,            // 菜品名称（必填）
+    int quantity,           // 数量，默认 1
+    String spiceLevel,      // 辣度要求（可选），如"不可免辣"、"微辣"
+    String notes,           // 备注（可选），如"加牛肉"、"不要香菜"
+    String category,        // 品类（可选），如"主食"、"饮品"、"小菜"
+    String price            // 单价（可选），String 类型
+) {
+    public DishItem {
+        quantity = quantity <= 0 ? 1 : quantity;
+    }
+
+    // 快捷构造：只有菜名时
+    public DishItem(String name) {
+        this(name, 1, null, null, null, null);
+    }
+}
+```
+
+**OrderData 定义示例**：
+
+```java
+public record OrderData(
+    String restaurant,        // 餐厅名
+    String time,              // 用餐时间，如"周五 19:20"
+    int people,               // 人数
+    List<DishItem> items,     // 菜品列表（保留完整信息）
+    String duration           // 用餐时长，如"2h15min"
+) {}
+```
 
 #### 步骤 1.2：Layer 2 数据模型
 
@@ -250,8 +286,8 @@ mvn spring-boot:run
 | `ConversationPlan` | `directions: List<String>` | 方向 |
 | | `availableHooks: List<String>` | 机会点 |
 | | `avoid: List<String>` | 限制 |
-| | `subGoals: List<ConversationSubGoal>` | （预留，第 15.2.4 节） |
-| | `contingencies: List<ContingencyPlan>` | （预留，第 15.2.4 节） |
+
+> **预留说明**：`subGoals`（子目标分解）和 `contingencies`（条件分支预案）是第 15.2.4 节提出的未来演进字段，MVP 阶段暂不定义。
 
 #### 步骤 1.4：WorkflowContext（第 15.2.2 节）
 

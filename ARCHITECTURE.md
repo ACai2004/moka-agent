@@ -143,10 +143,15 @@ Dynamic Context **不负责定义 AI 行为**，而是提供当前事实、场�
 时间：周五 19:20
 人数：3 人
 用餐时长：2 小时 15 分钟
-菜品：麻婆豆腐、夫妻肺片、口水鸡
+菜品：
+  · 麻婆豆腐 ×1
+  · 打抛饭 ×1（辣度：不可免辣，备注：加牛肉）
+  · 冰柠檬水 ×2
 当日天气：大雨
 临近节日：端午节
 ```
+
+> **注意**：Raw Facts 中的菜品信息保留了原始小票的细节（数量、辣度要求、备注等），这些细节是自然聊天的黄金素材。但 AI 不应主动逐项覆盖，具体使用方式由 Conversation Planner 控制（见第 5.2 节）。
 
 ### 4.2 Layer 2: Experience Understanding（体验理解层）
 
@@ -352,15 +357,44 @@ Planner 的作用是告诉模型："这些信息只是记忆锚点，不要主�
 
 解析方式：LLM 视觉能力（Claude Vision / GPT-4o）端到端解析 → 结构化 JSON。
 
+每道菜品保留原始小票中的丰富信息，不做压缩：
+
 ```
 {
   "restaurant": "川·隐味小馆",
-  "time": "19:20",
+  "time": "周五 19:20",
   "people": 3,
-  "dishes": ["麻婆豆腐", "夫妻肺片", "口水鸡"],
+  "items": [
+    {
+      "name": "麻婆豆腐",
+      "quantity": 1,
+      "spiceLevel": null,
+      "notes": null,
+      "category": null,
+      "price": null
+    },
+    {
+      "name": "打抛饭",
+      "quantity": 1,
+      "spiceLevel": "不可免辣",
+      "notes": "加牛肉",
+      "category": "主食",
+      "price": "38"
+    },
+    {
+      "name": "冰柠檬水",
+      "quantity": 2,
+      "spiceLevel": null,
+      "notes": null,
+      "category": "饮品",
+      "price": "18"
+    }
+  ],
   "duration": "2h15min"
 }
 ```
+
+**设计原则**：`DishItem` 所有可选字段（`spiceLevel`、`notes`、`category`、`price`）保留 `null` 的语义——小票上没写就是 `null`，不填默认值。这样后续 `ContextAssembler` 可以判断"有信息就写，没有就不写"。
 
 ### 9.3 Dish Knowledge
 
