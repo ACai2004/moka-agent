@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    show-sql: true
+
+moka:
+  llm:
+    mock: true
+
+logging:
+  level:
+    com.moka: DEBUG
