@@ -640,11 +640,16 @@ MVP Pipeline  →  条件分支 / 循环  →  Multi-Agent Graph  →  LangGraph
 
 ```java
 // MVP 阶段定义，所有 Agent 实现此接口
-interface WorkflowNode<I, O> {
+interface WorkflowNode {
     String nodeName();
-    O execute(WorkflowContext ctx, I input);
+    WorkflowContext execute(WorkflowContext ctx);
+    // 可选：该节点失败时是否跳过
+    default boolean isOptional() { return false; }
+    default WorkflowContext fallback(WorkflowContext ctx) { return ctx; }
 }
 ```
+
+**设计说明**：不使用泛型，统一为 `WorkflowContext → WorkflowContext`。每个 Node 从 `ctx` 读取自己需要的字段，写入自己负责的字段。这与未来 LangGraph 的 StateGraph 模式一致——Node 读写 State，不关心其他 Node 的签名。
 
 **为什么**：未来从 Pipeline 切换到 Graph 时，只需将"按列表顺序执行 Node"改为"按 DAG 调度 Node"，Node 本身不需要修改。这是架构演进成本最低的单一投资。
 
