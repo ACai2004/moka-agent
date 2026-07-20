@@ -229,7 +229,8 @@ mvn spring-boot:run
 | `OrderData` | `restaurant, time, people, items, duration` | 订单解析结果（第 9.2 节） |
 | `DishItem` | `name, quantity, spiceLevel, notes, category, price` | 单道菜品的完整信息（数量、辣度、备注等） |
 | `RestaurantProfile` | `restaurantName, positioning, experienceTags, environmentFeatures, serviceFeatures` | 餐厅信息（第 9.1 节） |
-| `DishKnowledge` | `dishName, features, experienceTags` | 菜品知识（第 9.3 节） |
+| `DishKnowledge` | `dishName, dishRole, features, experienceTags` | 菜品知识（第 9.3 节），含用餐角色 |
+| `DishRole` | 枚举：`SIGNATURE, MAIN, SIDE, STAPLE, DESSERT, DRINK, CONDIMENT` | 菜品在用餐中的角色 |
 | `RealtimeInfo` | `weather, holiday, traffic, currentTime` | 实时信息（第 8 节） |
 
 **注意事项**：
@@ -271,6 +272,33 @@ public record OrderData(
     String duration           // 用餐时长，如"2h15min"
 ) {}
 ```
+
+**DishRole 枚举定义**：
+
+```java
+public enum DishRole {
+    SIGNATURE,   // 招牌/特色菜 → 值得主动聊
+    MAIN,        // 主菜 → 可以聊
+    SIDE,        // 配菜/辅料 → 不主动提及
+    STAPLE,      // 主食 → 可以聊
+    DESSERT,     // 甜品 → 自然流动时提及
+    DRINK,       // 饮品 → 普通不提，特色可一带而过
+    CONDIMENT    // 调料/小料 → 不提及
+}
+```
+
+**DishKnowledge 定义示例**（包含新增的 dishRole）：
+
+```java
+public record DishKnowledge(
+    String dishName,
+    DishRole dishRole,           // 菜品在用餐中的角色，控制对话参与程度
+    List<String> features,       // 菜品特点，如["经典泰式", "酸辣开胃"]
+    List<String> experienceTags  // 体验方向，如["下饭", "招牌必点"]
+) {}
+```
+
+> **设计说明**：`dishRole` 是菜品知识库的固有属性，在数据录入时一次性标注。Agent 根据 `dishRole` 决定参与程度，从 `features` 和 `experienceTags` 自行推导自然切入角度。详见 `ARCHITECTURE.md` 第 9.3 节。
 
 #### 步骤 1.2：Layer 2 数据模型
 
