@@ -79,9 +79,18 @@ Pre-call Context (Runtime Prompt)
 
 ### 3.1 工程约束
 
-当前火山引擎 Voice Agent 接入方式不支持分别传入 System Prompt 和 Dynamic Context。因此：
+火山引擎 StartVoiceChat 接口的 `LLMConfig.SystemMessages` 支持传入多条系统提示词（`string[]`），且整个通话期间持续有效、不会被逐出。`UserPrompts` 则存在自动逐出机制——超出 `HistoryLength` 轮数后最早的消息会被移除。
 
-**MVP 方案（方案 B）**：Pre-call Context 动态生成 + System Prompt 合并为最终 Runtime Prompt，整体传给 Voice Agent。
+因此，虽然技术上可将 System Prompt 和 Dynamic Context 分别放入不同的 `SystemMessages` 条目，但考虑到 MVP 阶段以尽快跑通为目标，仍采用合并方案：
+
+**MVP 方案（方案 B）**：Pre-call Context 动态生成 + System Prompt 合并为最终 Runtime Prompt，整体传给 Voice Agent 的 `SystemMessages`。
+
+> **未来升级路径（第 10.3 节）**：当需要独立更新各部分时，可演进为：
+> ```
+> SystemMessages[0] = Static System Prompt
+> SystemMessages[1] = 三层 Dynamic Context（预组装为文本）
+> ```
+> 核心设计不变，只改变传入方式。
 
 ### 3.2 逻辑分层（必须保持）
 
@@ -309,11 +318,11 @@ Planner 的作用是告诉模型："这些信息只是记忆锚点，不要主�
 
 ### 7.1 技术选型
 
-- **采用 RAG 方案**（菜品数量多，信息结构多样）
-- MVP 阶段：不上向量数据库，不引入 Embedding 模型
-  - DishRetriever 通过精确匹配（HashMap）实现 O(1) 查找
-  - 菜品几百倍甚至几千倍时，精确匹配仍然足够
+- **采用精确匹配方案**（菜品数量多，但输入为准确菜名，无需语义搜索）
+- MVP 阶段：不引入 Embedding 模型，不上向量数据库
+  - DishRetriever 通过 HashMap 精确匹配实现 O(1) 查找
   - 原因：输入是准确的菜名（从小票提取），不是自然语言搜索
+  - 即使扩展到上万道菜，精确匹配仍足够
 
 ### 7.2 知识内容
 
@@ -334,7 +343,7 @@ Planner 的作用是告诉模型："这些信息只是记忆锚点，不要主�
 
 | 数据类型 | 存储方式 | 原因 |
 |---|---|---|
-| 餐厅 Profile | 结构化数据库 | 信息稳定，字段固定 |
+| 餐厅 Profile（含地址） | 结构化数据库 / JSON 文件 | 信息稳定，字段固定 |
 | 菜品知识 | JSON 文件 / 结构化数据库 | 菜品名精确匹配，无需向量检索 |
 
 ---
@@ -355,15 +364,16 @@ Planner 的作用是告诉模型："这些信息只是记忆锚点，不要主�
 
 ```
 {
-  "restaurant_name": "川·隐味小馆",
-  "positioning": "社区型家常川菜",
-  "experience_tags": ["家庭聚餐", "日常吃饭", "轻松氛围"],
-  "environment_features": ["暖色灯光", "温热大麦茶", "门口炒瓜子"],
-  "service_features": ["主动添茶", "稳定上菜节奏"]
+  "restaurant_name": "売泰",
+  "address": "北京市朝阳区三里屯 T+MALL 负一层",
+  "positioning": "泰国街头小吃店，南洋复古风",
+  "environment_features": ["复古海报", "马赛克瓷砖", "藤编灯具"],
+  "service_features": ["快餐型服务", "点餐上菜效率高"],
+  "experience_tags": ["朋友聚餐", "拍照打卡", "性价比高"]
 }
 ```
 
-结构化存储，不采用知识库（信息稳定）。
+结构化存储，不采用知识库（信息稳定）。地址字段用于自动定位城市和区，用于高德天气 API 查询。
 
 ### 9.2 Order Data
 
@@ -484,10 +494,14 @@ Internal Context → [Volcano Adapter] → Volcano Engine Format
 
 | 技术 | 用途 | 说明 |
 |---|---|---|
-| Java 21 | 运行环境 | |
+| Java 21+ | 运行环境 | 当前使用 JDK 25 |
 | Spring Boot 3.x | 业务后端框架 | API、数据层、依赖注入 |
-| LangChain4j | AI 集成层 | LLM 调用、RAG、Agent 接口、Tool 定义 |
-| MySQL / PostgreSQL | 业务数据存储 | 用户、餐厅、订单、通话任务 |
+| LangChain4j | AI SDK | LLM 调用、结构输出、Agent 接口（不含编排） |
+| DeepSeek API | 文本推理（Experience / Planner） | 直连 `api.deepseek.com` |
+| OpenRouter API | 视觉模型（小票 OCR） | 使用 `qwen3.6-plus` |
+| 高德地图 API | 区级天气查询 | Web 服务类型，免费额度 30 万次/日 |
+| 节假日 API | 节假日判断 | `timor.tech` 免费接口 |
+| PostgreSQL | 业务数据存储 | 用户、餐厅、订单、通话任务 |
 | Redis | 缓存、会话管理 | |
 | Maven | 构建工具 | |
 
@@ -497,10 +511,11 @@ LangChain4j 被当作 **AI SDK** 使用，不是 Workflow 框架：
 
 | 用途 | LangChain4j 组件 |
 |---|---|
-| Agent 声明式定义 | `@AiService` 接口 + `@SystemPrompt` / `@V` |
-| 结构化 LLM 输出 | `@AiService` 接口方法返回 POJO / Record |
+| Agent 声明式定义 | 使用 `AiServices.builder()` 手动创建代理（不加 `@AiService` 注解） |
+| Agent 方法注解 | `@SystemMessage` + `@UserMessage` + `@V` 定义输入输出 |
+| 结构化 LLM 输出 | 接口方法返回 POJO / Record，LangChain4j 自动解析 |
 | 菜品精确匹配 | 自实现 HashMap 查找，不依赖 LangChain4j（无需 Embedding） |
-| 实时信息获取 | `@Tool` 注解定义 Tool |
+| 实时信息获取 | 直接调用 API（高德 / wttr.in），不通过 `@Tool` |
 | Workflow 编排 | **不用 LangChain4j Chain**，自己实现 |
 
 > 关键约束：LangChain4j 只用在 `ai/` 层下的 LLM 调用部分。Workflow 编排由 `ContextPreparationWorkflow` 类手动控制，不引入 LangChain4j 的 Chain 机制。
@@ -510,40 +525,56 @@ LangChain4j 被当作 **AI SDK** 使用，不是 Workflow 框架：
 ```
 ai/
 ├── workflow/
-│   └── ContextPreparationWorkflow    # 编排各步骤顺序（手动控制，非 Chain）
+│   ├── WorkflowNode                  # Node 接口
+│   ├── ContextPreparationWorkflow    # 6 步 Pipeline 编排（手动控制，非 Chain）
+│   └── WorkflowExecutionException    # 自定义异常
 ├── agent/
-│   ├── OrderUnderstandingAgent       # @AiService 接口 + 实现
-│   ├── ExperienceUnderstandingAgent  # @AiService 接口 + 实现
-│   └── ConversationPlannerAgent      # @AiService 接口 + 实现
+│   ├── OrderUnderstandingService     # 订单理解服务接口（不是 @AiService）
+│   ├── MockOrderUnderstandingService # Mock 实现（mock=true）
+│   ├── RealOrderUnderstandingService # 真实视觉 LLM 实现（mock=false）
+│   ├── ExperienceUnderstandingAgent  # AI Agent 接口（@SystemMessage + @UserMessage）
+│   └── ConversationPlannerAgent      # AI Agent 接口（@SystemMessage + @UserMessage）
 ├── retrieval/
-│   └── DishRetriever                 # ContentRetriever 封装
+│   ├── DishRetriever                 # 菜品知识 HashMap 匹配
+│   └── RestaurantRepository          # 餐厅信息模糊匹配
 ├── tools/
-│   └── WeatherTool                   # @Tool 注解
+│   └── WeatherTool                   # 高德天气 API + wttr.in fallback
 ├── context/
-│   └── ContextAssembler              # Context 组装
+│   └── ContextAssembler              # 三层 Context 组装
 ├── prompt/
+│   ├── SystemPromptLoader            # Static System Prompt 加载
 │   └── PromptAssembler               # System Prompt + Context 合并
 └── adapter/
-    └── VolcanoAdapter                # 火山引擎接口适配
+    └── VolcanoAdapter                # 火山引擎接口适配（预留）
 ```
 
-Agent 定义示例（LangChain4j `@AiService` 模式）：
+Agent 定义示例（LangChain4j 手动代理模式）：
 
 ```java
-@AiService
+// 接口定义（不加 @AiService 注解，避免自动代理冲突）
+@SystemMessage("""
+    你是一个餐后体验分析专家。
+    根据订单信息、菜品知识和实时环境，
+    推测本次用餐可能存在的体验场景。
+    所有输出必须是可能性，不能是确定性结论。
+    """)
 interface ExperienceUnderstandingAgent {
 
-    @SystemPrompt("""
-        你是一个餐后体验分析专家。
-        根据订单信息、菜品知识和实时环境，
-        推测本次用餐可能存在的体验场景。
-        所有输出必须是可能性，不能是确定性结论。
-        """)
+    @UserMessage("订单信息：{{order}}\n\n菜品知识：{{dishes}}\n\n实时环境：{{realtime}}")
     ExperienceUnderstanding analyze(
         @V("order") OrderData order,
         @V("dishes") List<DishKnowledge> dishes,
         @V("realtime") RealtimeInfo realtime
     );
+}
+
+// 代理创建（在 @Configuration 类中，仅在 mock=false 时生效）
+@Bean
+@ConditionalOnProperty(name = "moka.llm.mock", havingValue = "false")
+public ExperienceUnderstandingAgent experienceAgent(ChatLanguageModel model) {
+    return AiServices.builder(ExperienceUnderstandingAgent.class)
+            .chatLanguageModel(model)
+            .build();
 }
 ```
 
@@ -571,6 +602,10 @@ interface ExperienceUnderstandingAgent {
 6. `ExperienceUnderstandingAgent` — 体验理解推理
 7. `ConversationPlannerAgent` — 对话规划
 8. `ContextPreparationWorkflow` — Workflow 编排
+
+### 第二点五优先（视觉模型接入）
+
+8.5. **视觉 LLM 接入** — 替换 Mock 订单数据，调用 OpenRouter qwen3.6-plus 识别真实小票照片
 
 ### 第三优先（工程化）
 

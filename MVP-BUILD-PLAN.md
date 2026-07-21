@@ -30,22 +30,27 @@ com.moka
 ├── MokaApplication.java                  # Spring Boot 启动类
 ├── ai
 │   ├── workflow
-│   │   ├── WorkflowNode.java             # Node 接口（15.2.1 节）
-│   │   └── ContextPreparationWorkflow.java # Workflow 编排
+│   │   ├── WorkflowNode.java             # Node 接口
+│   │   ├── WorkflowExecutionException.java
+│   │   └── ContextPreparationWorkflow.java # 6 步 Pipeline 编排
 │   ├── agent
-│   │   ├── OrderUnderstandingAgent.java  # @AiService 接口
-│   │   ├── ExperienceUnderstandingAgent.java
-│   │   └── ConversationPlannerAgent.java
+│   │   ├── OrderUnderstandingService.java      # 订单理解服务接口
+│   │   ├── MockOrderUnderstandingService.java   # Mock 实现（mock=true）
+│   │   ├── RealOrderUnderstandingService.java   # 视觉 LLM 实现（mock=false）
+│   │   ├── ExperienceUnderstandingAgent.java    # AI Agent 接口（无 @AiService）
+│   │   └── ConversationPlannerAgent.java        # AI Agent 接口（无 @AiService）
 │   ├── retrieval
-│   │   └── DishRetriever.java
+│   │   ├── DishRetriever.java           # 菜品知识 HashMap 匹配
+│   │   └── RestaurantRepository.java    # 餐厅信息模糊匹配
 │   ├── tools
-│   │   └── WeatherTool.java
+│   │   └── WeatherTool.java             # 高德天气 + wttr.in fallback
 │   ├── context
-│   │   └── ContextAssembler.java
+│   │   └── ContextAssembler.java        # 三层 Context 组装
 │   ├── prompt
-│   │   └── PromptAssembler.java
+│   │   ├── SystemPromptLoader.java      # Static System Prompt 加载
+│   │   └── PromptAssembler.java         # System Prompt + Context 合并
 │   └── adapter
-│       └── VolcanoAdapter.java
+│       └── VolcanoAdapter.java          # 火山引擎接口适配（预留）
 ├── biz
 │   ├── entity
 │   │   ├── User.java
@@ -62,8 +67,8 @@ com.moka
 │       └── CallController.java
 └── common
     ├── config
-    │   ├── LangChain4jConfig.java
-    │   └── OpenRouterConfig.java
+    │   ├── LangChain4jConfig.java        # DeepSeek + OpenRouter 双模型配置
+    │   └── AiServiceConfig.java          # 条件创建 AI 代理（mock=false）
     ├── mock
     │   └── MockLlmService.java           # 开发阶段 Mock LLM
     └── exception
@@ -102,6 +107,8 @@ src/main/resources/data/sample-dish-knowledge.json
 | Redis | Docker (`docker-compose.yml`) | 缓存 / 会话管理 |
 | DeepSeek API | 外部服务 | 文本推理模型 |
 | OpenRouter API | 外部服务 | 视觉模型（小票解析） |
+| 高德地图 API | 外部服务（免费） | 区级天气查询，需注册 Web 服务 Key |
+| 节假日 API | 外部服务（免费） | `timor.tech`，无需 Key |
 
 ---
 
@@ -154,7 +161,7 @@ lombok
 jackson-databind
 ```
 
-**关键配置**：LangChain4j 的 `open-ai` 模块可以兼容 OpenRouter API，只需覆盖 `baseUrl` 即可。
+**关键配置**：双模型独立配置——DeepSeek 直连用于文本推理，OpenRouter 用于视觉模型。
 
 #### 步骤 0.3：配置 application.yml
 
@@ -406,27 +413,41 @@ public class MockLlmService {
 
 **注意**：@AiService 的 mock 可以通过 Spring 的 `@MockitoBean` 或手动实现接口 mock 来完成。具体方式取决于 LangChain4j 的配置方式。
 
-#### 步骤 2.1：OrderUnderstandingAgent
+#### 步骤 2.1：OrderUnderstandingService
 
-**文件**：`com.moka.ai.agent.OrderUnderstandingAgent.java`
+**文件**：`com.moka.ai.agent.OrderUnderstandingService.java`
+
+实际实现不使用 `@AiService` 注解，而是采用接口 + 双实现模式：
 
 ```java
-@AiService
-public interface OrderUnderstandingAgent {
+// 服务接口
+public interface OrderUnderstandingService {
+    OrderData analyzeOrder(String photoBase64);
+}
 
-    @SystemPrompt("""
-        你是一个订单理解专家。分析用户上传的餐厅小票照片，
-        提取结构化订单信息。
-        只输出 JSON 格式的结果，不要多余内容。
-        """)
-    OrderData analyzeOrder(@V("photo") String photoBase64);
+// Mock 实现（moka.llm.mock=true 时生效）
+@Component
+@ConditionalOnProperty(name = "moka.llm.mock", havingValue = "true")
+public class MockOrderUnderstandingService implements OrderUnderstandingService {
+    public OrderData analyzeOrder(String photoBase64) {
+        return mockLlmService.mockOrderData();  // 返回预设数据
+    }
+}
+
+// 真实实现（moka.llm.mock=false 时生效）
+@Component
+@ConditionalOnProperty(name = "moka.llm.mock", havingValue = "false")
+public class RealOrderUnderstandingService implements OrderUnderstandingService {
+    public OrderData analyzeOrder(String photoBase64) {
+        // 调用 OpenRouter 视觉 API（qwen3.6-plus）解析小票照片
+        // 使用 JDK HttpClient 直调 REST API
+    }
 }
 ```
 
 **注意事项**：
-- 视觉模型需要支持图片输入（通过 OpenRouter 的多模态模型）
-- 如果 `qwen3.6-plus` 不支持视觉，需要单独设定一个视觉模型
-- **错误处理**：如果照片无法解析，应返回特定的错误标记，而非抛异常
+- 视觉模型使用 OpenRouter 的 qwen3.6-plus（支持多模态图片输入）
+- **错误处理**：如果照片无法解析，抛异常终止流程（必选节点）
 
 **单元测试**：输入一张测试用的小票照片（`src/test/resources/test-receipt.jpg`），验证输出结构。
 
@@ -580,26 +601,27 @@ mock OrderData → [DishRetriever] → mock DishKnowledge
 
 **目标**：实现真正的 AI 推理，替换 Phase 2.5 中的 mock。
 
-#### 步骤 3.1：ExperienceUnderstandingAgent
+#### 步骤 3.1：ExperienceUnderstandingAgent（接口，不添加 @AiService）
 
 ```java
-@AiService
+@SystemMessage("""
+    你是一个餐后体验分析专家。
+    根据订单信息、菜品知识和实时环境，
+    推测本次用餐可能存在的体验场景。
+
+    关键约束（必须遵守）：
+    1. 所有输出必须是「可能性」，不是「结论」
+    2. 必须保持低确定性
+    3. 禁止将推测当作事实
+    4. 每条可能性必须标注 confidenceLevel（只能是 LOW 或 MEDIUM，不允许 HIGH）
+    5. 如果信息不足以判断，输出空列表
+
+    输出 JSON 格式，根对象包含 possibilities 数组，
+    每项包含 description、confidenceLevel、evidenceSource。
+    """)
 public interface ExperienceUnderstandingAgent {
 
-    @SystemPrompt("""
-        你是一个餐后体验分析专家。
-        根据订单信息、菜品知识和实时环境，
-        推测本次用餐可能存在的体验场景。
-
-        关键约束（必须遵守）：
-        1. 所有输出必须是「可能性」，不是「结论」
-        2. 必须保持低确定性
-        3. 禁止将推测当作事实
-        4. 每条可能性必须标注 confidenceLevel（只能是 LOW 或 MEDIUM，不允许 HIGH）
-        5. 如果信息不足以判断，输出空列表
-
-        输出格式：JSON 数组，每项包含 description 和 confidenceLevel。
-        """)
+    @UserMessage("订单信息：{{order}}\n\n菜品知识：{{dishes}}\n\n实时环境：{{realtime}}")
     ExperienceUnderstanding analyze(
         @V("order") OrderData order,
         @V("dishes") List<DishKnowledge> dishes,
@@ -608,17 +630,22 @@ public interface ExperienceUnderstandingAgent {
 }
 ```
 
+**代理创建**：在 `AiServiceConfig` 中使用 `AiServices.builder()` 创建代理，仅在 `moka.llm.mock=false` 时生效。
+
 **关键约束**（第 4.2 节）：
 - 不允许输出确定性结论
 - 禁止使用"用户一定..."、"用户肯定..."等措辞
 - `confidenceLevel` 不允许为 HIGH
 
-**测试思路**：给一组固定输入，验证输出中没有确定性断言词。（集成测试阶段验证）
-
 #### 步骤 3.2：ConversationPlannerAgent
 
 ```java
-@AiService
+@SystemMessage("""
+    你是一个对话规划专家。
+    根据订单信息、菜品知识、实时信息以及体验理解分析，
+    为 Voice Agent 生成对话策略。
+    ...
+    """)
 public interface ConversationPlannerAgent {
 
     @SystemPrompt("""
@@ -659,7 +686,8 @@ public interface ConversationPlannerAgent {
 
 更新 `ContextPreparationWorkflow` 中的节点注册，将 mock 实现替换为真实 Agent 实现。
 
-**注意**：替换后应保留切换回 mock 的能力（通过 `moka.llm.mock` 配置）。
+**注意**：ContextPreparationWorkflow 只在 mock=false 时加载。
+Mock 模式由 ContextPreparationDemo 独立运行，两者互不干扰。
 
 ✅ **完成标志**：输入完整真实数据，两个 Agent 返回非空且符合约束的结构化输出。
 
@@ -748,6 +776,33 @@ public class ContextPreparationWorkflow {
 模拟某个可选节点抛异常 → 验证 fallback 生效，流程继续。
 
 ✅ **完成标志**：Workflow 可完整运行，三种测试场景通过。
+
+---
+
+### Phase 4.5：视觉模型接入（小票 OCR）
+
+**目标**：替换 Mock 订单数据，调用真实视觉 LLM 识别小票照片。
+
+#### 步骤 4.5.1：改造 RealOrderUnderstandingService
+
+不再使用 `@AiService`，改为通过 RestTemplate / JDK HttpClient 直调 OpenRouter 视觉 API：
+
+```java
+// 构造请求发送至 OpenRouter /chat/completions
+// 使用 System Prompt 指导视觉模型提取结构化 JSON
+// 使用 Jackson 解析返回的 JSON → OrderData
+```
+
+**注意事项**：
+- 使用 JDK HttpClient 替代 RestTemplate（避免某些 API 的编码兼容性问题）
+- 温度设为 0.1（高确定性，小票识别不需要创意）
+- 照片为空时返回 fallback 数据（预览模式）
+
+#### 步骤 4.5.2：集成到 Workflow
+
+OrderNode 自动调用 RealOrderUnderstandingService，与 Workflow 无缝衔接。
+
+✅ **完成标志**：上传小票照片 → Workflow 自动识别 → 生成完整 Runtime Prompt。
 
 ---
 
@@ -887,6 +942,7 @@ Phase 2 (上游模块)   → [1][2][3] 独立可运行 + 上传 API
 Phase 2.5 (数据流)   → 端到端跑通（Mock LLM）
 Phase 3 (核心推理)   → [4][5] 真实 AI Agent 替换 Mock
 Phase 4 (Workflow)  → ContextPreparationWorkflow 完整可执行
+Phase 4.5 (视觉 OCR) → 视觉 LLM 替换 Mock 订单数据
 Phase 5 (火山对接)   → 真实通话可发起
 Phase 6 (工程加固)   → 业务管理 + 重试 + 缓存 + 版本 + 质量
 ```
