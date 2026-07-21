@@ -1,7 +1,10 @@
 package com.moka.ai.context;
 
+import com.moka.ai.retrieval.RestaurantRepository;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -15,6 +18,12 @@ import java.util.stream.Collectors;
  */
 @Component
 public class ContextAssembler {
+
+    private final RestaurantRepository restaurantRepository;
+
+    public ContextAssembler(RestaurantRepository restaurantRepository) {
+        this.restaurantRepository = restaurantRepository;
+    }
 
     /**
      * 组装三层 Dynamic Context。
@@ -42,13 +51,34 @@ public class ContextAssembler {
 
         sb.append("--- 用餐信息 ---\n");
         sb.append("餐厅：").append(order.restaurant()).append("\n");
+
+        // 餐厅环境与服务信息
+        Optional<RestaurantProfile> restaurant = restaurantRepository.findByName(order.restaurant());
+        if (restaurant.isPresent()) {
+            RestaurantProfile profile = restaurant.get();
+            if (profile.environmentFeatures() != null && !profile.environmentFeatures().isEmpty()) {
+                sb.append("氛围：").append(String.join("、", profile.environmentFeatures())).append("\n");
+            }
+            if (profile.serviceFeatures() != null && !profile.serviceFeatures().isEmpty()) {
+                sb.append("服务：").append(String.join("、", profile.serviceFeatures())).append("\n");
+            }
+        }
+
         sb.append("时间：").append(order.time()).append("\n");
         sb.append("人数：").append(order.people()).append(" 人\n");
-        sb.append("用餐时长：").append(order.duration()).append("\n");
+        if (order.duration() != null && !order.duration().isBlank()) {
+            sb.append("用餐时长：").append(order.duration()).append("\n");
+        }
+
+        // 构建菜品名→菜品知识 Map（只包含用户点的菜）
+        Map<String, DishKnowledge> knowledgeMap = ctx.getDishes() != null
+                ? ctx.getDishes().stream()
+                        .collect(Collectors.toMap(DishKnowledge::dishName, dk -> dk, (a, b) -> a))
+                : Map.of();
 
         sb.append("菜品：\n");
         for (DishItem item : order.items()) {
-            String line = formatDishItem(item);
+            String line = formatDishItem(item, knowledgeMap.get(item.name()));
             sb.append("  · ").append(line).append("\n");
         }
 
@@ -59,24 +89,41 @@ public class ContextAssembler {
             if (realtime.holiday() != null && !realtime.holiday().isBlank()) {
                 sb.append("临近节日：").append(realtime.holiday()).append("\n");
             }
+            if (realtime.currentTime() != null && !realtime.currentTime().isBlank()) {
+                sb.append("当前时间：").append(realtime.currentTime()).append("\n");
+            }
         }
     }
 
-    private String formatDishItem(DishItem item) {
+    private String formatDishItem(DishItem item, DishKnowledge knowledge) {
         StringBuilder line = new StringBuilder(item.name());
         line.append(" ×").append(item.quantity());
 
+        // 辣度与备注
         if (item.spiceLevel() != null && !item.spiceLevel().isBlank()) {
             line.append("（辣度：").append(item.spiceLevel()).append("）");
         }
         if (item.notes() != null && !item.notes().isBlank()) {
-            // 如果已有辣度信息，备注跟在后面
             if (item.spiceLevel() != null && !item.spiceLevel().isBlank()) {
                 line.append("，备注：").append(item.notes());
             } else {
                 line.append("（备注：").append(item.notes()).append("）");
             }
         }
+
+        // 菜品特点（如果有知识匹配）
+        if (knowledge != null) {
+            List<String> tags = knowledge.features();
+            if (tags != null && !tags.isEmpty()) {
+                line.append(" —— ");
+                line.append(String.join("、", tags.subList(0, Math.min(tags.size(), 3))));
+            }
+            List<String> expTags = knowledge.experienceTags();
+            if (expTags != null && !expTags.isEmpty()) {
+                line.append("，").append(String.join("、", expTags.subList(0, Math.min(expTags.size(), 2))));
+            }
+        }
+
         return line.toString();
     }
 
@@ -92,8 +139,11 @@ public class ContextAssembler {
 
         sb.append("--- 体验理解 ---\n");
         for (ExperiencePossibility p : exp.possibilities()) {
-            sb.append("- [").append(p.confidenceLevel()).append("] ");
-            sb.append(p.description());
+            String prefix = switch (p.confidenceLevel()) {
+                case MEDIUM -> "推测";
+                case LOW -> "参考";
+            };
+            sb.append("- ").append(prefix).append("：").append(p.description());
             if (p.evidenceSource() != null && !p.evidenceSource().isBlank()) {
                 sb.append("（依据：").append(p.evidenceSource()).append("）");
             }
