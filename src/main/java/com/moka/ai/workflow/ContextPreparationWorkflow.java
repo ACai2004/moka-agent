@@ -6,13 +6,21 @@ import com.moka.ai.agent.OrderUnderstandingService;
 import com.moka.ai.context.*;
 import com.moka.ai.prompt.PromptAssembler;
 import com.moka.ai.retrieval.DishRetriever;
+import com.moka.ai.retrieval.RestaurantRepository;
 import com.moka.ai.tools.WeatherTool;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +40,9 @@ public class ContextPreparationWorkflow {
 
     private final List<WorkflowNode> nodes;
 
+    private final ObjectMapper objectMapper;
+    private final RestaurantRepository restaurantRepository;
+
     public ContextPreparationWorkflow(
             OrderUnderstandingService orderService,
             DishRetriever dishRetriever,
@@ -39,12 +50,16 @@ public class ContextPreparationWorkflow {
             ExperienceUnderstandingAgent experienceAgent,
             ConversationPlannerAgent plannerAgent,
             ContextAssembler contextAssembler,
-            PromptAssembler promptAssembler
+            PromptAssembler promptAssembler,
+            RestaurantRepository restaurantRepository,
+            ObjectMapper objectMapper
     ) {
+        this.objectMapper = objectMapper;
+        this.restaurantRepository = restaurantRepository;
         this.nodes = List.of(
                 new OrderNode(orderService),
                 new DishNode(dishRetriever),
-                new RealtimeNode(weatherTool),
+                new RealtimeNode(weatherTool, restaurantRepository, objectMapper),
                 new ExperienceNode(experienceAgent),
                 new PlannerNode(plannerAgent),
                 new AssemblyNode(contextAssembler, promptAssembler)
@@ -124,18 +139,86 @@ public class ContextPreparationWorkflow {
     }
 
     /** [3] 实时信息 */
-    private record RealtimeNode(WeatherTool tool) implements WorkflowNode {
+    private record RealtimeNode(WeatherTool tool,
+                                RestaurantRepository restaurantRepo,
+                                ObjectMapper objectMapper) implements WorkflowNode {
         @Override
         public String nodeName() { return "Realtime"; }
 
         @Override
         public WorkflowContext execute(WorkflowContext ctx) {
-            String weather = tool.getWeather("北京");
-            // 当前时间取系统时间
-            RealtimeInfo realtime = new RealtimeInfo(weather, null, null, null);
+            String restaurantName = ctx.getOrder() != null ? ctx.getOrder().restaurant() : "";
+            String weather;
+            String cityFallback = "北京";
+
+            // 根据餐厅名查找地址，提取区/城市
+            Optional<RestaurantProfile> restaurant = restaurantRepo.findByName(restaurantName);
+            if (restaurant.isPresent() && restaurant.get().address() != null) {
+                String addr = restaurant.get().address();
+                // 从地址中提取区名，如"北京市朝阳区三里屯" → "朝阳区"
+                String district = extractDistrict(addr);
+                cityFallback = extractCity(addr);
+                weather = tool.getDistrictWeather(district, cityFallback);
+            } else {
+                weather = tool.getWeather(cityFallback);
+            }
+
+            // 当前时间
+            LocalDateTime now = LocalDateTime.now();
+            String dayOfWeek = now.getDayOfWeek().getDisplayName(
+                    java.time.format.TextStyle.FULL, Locale.CHINESE);
+            String formattedTime = String.format("%s %s", dayOfWeek,
+                    now.format(DateTimeFormatter.ofPattern("HH:mm")));
+
+            // 节假日
+            String holiday = fetchHoliday(now.toLocalDate().toString());
+
+            RealtimeInfo realtime = new RealtimeInfo(weather, holiday, null, formattedTime);
             ctx.setRealtime(realtime);
-            log.info("[3] Realtime: 天气={}", weather);
+            log.info("[3] Realtime: 天气={}, 时间={}, 节日={}", weather, formattedTime, holiday);
             return ctx;
+        }
+
+        /** 从地址中提取区名，如"北京市朝阳区三里屯" → "朝阳区" */
+        private String extractDistrict(String address) {
+            int start = address.indexOf("市");
+            int end = address.indexOf("区");
+            if (start >= 0 && end > start) {
+                return address.substring(start + 1, end + 1);
+            }
+            return address;
+        }
+
+        /** 从地址中提取城市名，如"北京市朝阳区三里屯" → "北京" */
+        private String extractCity(String address) {
+            if (address.startsWith("北京")) return "北京";
+            if (address.startsWith("上海")) return "上海";
+            if (address.startsWith("广州")) return "广州";
+            if (address.startsWith("深圳")) return "深圳";
+            // 通用提取：取第一个"市"前的部分
+            int idx = address.indexOf("市");
+            if (idx > 0) return address.substring(0, idx + 1);
+            return address;
+        }
+
+        /** 调用节假日 API 获取当天节日信息 */
+        private String fetchHoliday(String dateStr) {
+            try {
+                RestTemplate rt = new RestTemplate();
+                String url = "https://timor.tech/api/holiday/info/" + dateStr;
+                String resp = rt.getForObject(url, String.class);
+                if (resp != null) {
+                    JsonNode root = objectMapper.readTree(resp);
+                    JsonNode holidayNode = root.path("holiday");
+                    if (!holidayNode.isNull() && !holidayNode.isMissingNode()) {
+                        String name = holidayNode.path("name").asText("");
+                        if (!name.isBlank()) return name;
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("节假日 API 调用失败: {}", e.getMessage());
+            }
+            return null;
         }
     }
 

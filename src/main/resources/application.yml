@@ -41,3 +41,7 @@ moka:
     api-key: ${OPENROUTER_API_KEY}
     base-url: https://openrouter.ai/api/v1
     vision-model: qwen3.6-plus
+
+  gaode:
+    api-key: ${GAODE_API_KEY}
+    base-url: https://restapi.amap.com/v3
