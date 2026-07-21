@@ -49,7 +49,8 @@ public class LangChain4jConfig {
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
-                .temperature(0.7)
+                .temperature(0.1)
+                .maxTokens(2000)
                 .timeout(Duration.ofSeconds(60))
                 .build();
     }
