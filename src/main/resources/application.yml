@@ -35,7 +35,7 @@ moka:
   deepseek:
     api-key: ${DEEPSEEK_API_KEY}
     base-url: https://api.deepseek.com
-    text-model: deepseek-v4
+    text-model: deepseek-v4-flash
 
   openrouter:
     api-key: ${OPENROUTER_API_KEY}

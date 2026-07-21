@@ -12,7 +12,7 @@
 
 | 用途 | 模型 | 提供商 | 备注 |
 |---|---|---|---|
-| 文本推理（ExperienceUnderstanding / ConversationPlanner） | `deepseek-v4` | DeepSeek（直连） | 直接调用 DeepSeek API，不经 OpenRouter |
+| 文本推理（ExperienceUnderstanding / ConversationPlanner） | `deepseek-v4-flash` | DeepSeek（直连） | 直接调用 DeepSeek API，不经 OpenRouter |
 | 视觉解析（OrderUnderstanding：小票照片→结构化数据） | `qwen3.6-plus` | OpenRouter | 视觉模型走 OpenRouter |
 | Embedding | 不需要 | — | DishRetriever 使用精确匹配（HashMap），无需 Embedding |
 
@@ -20,7 +20,7 @@
 
 | 服务 | base URL | API Key |
 |---|---|---|
-| DeepSeek（文本） | `https://api.deepseek.com` | `${DEEPSEEK_API_KEY}` |
+| DeepSeek（文本） | `https://api.deepseek.com` | `${DEEPSEEK_API_KEY}` | `deepseek-v4-flash` |
 | OpenRouter（视觉） | `https://openrouter.ai/api/v1` | `${OPENROUTER_API_KEY}` |
 
 ### D2: 模块包结构
@@ -172,7 +172,7 @@ moka:
   deepseek:
     api-key: ${DEEPSEEK_API_KEY}
     base-url: https://api.deepseek.com
-    text-model: deepseek-v4
+    text-model: deepseek-v4-flash
 
   openrouter:
     api-key: ${OPENROUTER_API_KEY}
