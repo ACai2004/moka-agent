@@ -41,5 +41,21 @@ Thumbs.db
 ## Kotlin
 .kotlin/
 
+## Secrets / API Keys
+API Key.txt
+.env
+
+## Image files (receipt photos, screenshots - not for public repo)
+*.jpg
+*.jpeg
+*.png
+
+## Test / Demo artifacts
+demo-*.json
+request_body.json
+
+## Local development overrides
+*.local.yml
+
 ## Logs
 *.log
