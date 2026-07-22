@@ -550,8 +550,11 @@ public class ContextAssembler {
 
 **输入来源**：
 - Layer 1：`ctx.order` + `ctx.dishes` + `ctx.realtime`
-- Layer 2：`ctx.experience`（Phase 2.5 中用 MockLlmService 的 mock 数据）
-- Layer 3：`ctx.plan`（Phase 2.5 中用 MockLlmService 的 mock 数据）
+  - 自动通过 `RestaurantRepository` 查询餐厅环境和服务信息，追加到菜品信息下方
+  - 自动将菜品知识（features/experienceTags）追加到对应菜品名后，用 ` —— ` 分隔
+- Layer 2：`ctx.experience`
+  - `MEDIUM` 置信度映射为前缀 "推测"；`LOW` 映射为 "参考"
+- Layer 3：`ctx.plan`
 
 #### 步骤 2.5.2：PromptAssembler
 
