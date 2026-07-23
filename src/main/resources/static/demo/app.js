@@ -607,6 +607,9 @@ function bindEvents() {
     });
     el.resetBtn.addEventListener('click', resetAll);
 
+    // ---------- 通话按钮（对接技术部 API） ----------
+    el.callBtn.addEventListener('click', createCallAndJump);
+
     // ---------- 文件输入变化后启用按钮 ----------
     el.fileInput.addEventListener('change', () => {
         const hasFile = el.fileInput.files.length > 0;
@@ -626,6 +629,133 @@ function esc(str) {
     const div = document.createElement('div');
     div.appendChild(document.createTextNode(String(str)));
     return div.innerHTML;
+}
+
+// ============================================================
+// 9. 通话对接 — 技术部 API
+// ============================================================
+
+/** API 凭据（demo 环境，上线前需迁移到后端配置） */
+const CALL_API_KEY = 'ovd_0rnkOZTbZbHsMcsBhkWpPguKoi82LQkL';
+const CALL_API_SECRET = '31987887662c00a5277d9ba06b359029088619359487d6a5420a19aa0d157b24';
+
+/** HMAC-SHA256 签名 */
+async function hmacSha256(secret, message) {
+    var encoder = new TextEncoder();
+    var keyData = await crypto.subtle.importKey(
+        'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    );
+    var signature = await crypto.subtle.sign('HMAC', keyData, encoder.encode(message));
+    var bytes = new Uint8Array(signature);
+    return btoa(String.fromCharCode.apply(null, bytes));
+}
+
+/** 生成 API 请求的 HMAC 认证头 */
+async function createAuthHeader(method, path, jsonBody) {
+    var timestamp = String(Date.now());
+    var nonce = crypto.randomUUID ? crypto.randomUUID() : timestamp + '-' + Math.random().toString(36).slice(2);
+    var stringToSign = method + '\n' + path + '\n' + timestamp + '\n' + nonce + '\n' + (jsonBody || '');
+    var signature = await hmacSha256(CALL_API_SECRET, stringToSign);
+    return 'HMAC-SHA256 ' + signature + ':' + timestamp + ':' + nonce;
+}
+
+/** 创建通话并跳转到通话页面 */
+async function createCallAndJump() {
+
+    if (!state.runtimePrompt || !state.runtimePrompt.finalPrompt) {
+        alert('请先完成 Pipeline 解析，再发起通话');
+        return;
+    }
+
+    var btn = el.callBtn;
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ 创建中...';
+
+    var userId = 'demo-' + Date.now().toString(36);
+    var url = '/api/v1/proxy/sessions';
+    var redirectUrl = window.location.origin + '/demo/index.html';
+
+    var body = JSON.stringify({
+        userId: userId,
+        redirectUrl: redirectUrl,
+        botConfig: {
+            botName: '餐后体验回访 AI',
+            systemPrompt: state.runtimePrompt.finalPrompt,
+            speakingStyle: '语速适中，语调亲切，像真人客服一样自然',
+            speaker: 'sweet-female',
+            provider: 'volcano-rtc',
+            welcomeMessage: '您好',
+            openingLine: '您好，我是餐后体验回访助手，想和您聊聊刚才的用餐体验',
+            idleConfig: {
+                enabled: true,
+                timeoutSeconds: 30,
+                maxTriggers: 3,
+                resetOn: 'userSpeak'
+            },
+            endTriggers: [
+                {
+                    type: 'normal',
+                    keywords: ['通话结束', '感谢您的配合'],
+                    closingLine: '感谢您的分享，祝您生活愉快！',
+                    threshold: 1
+                }
+            ],
+            userPauseTimeoutMs: 1000,
+            bargeInEnabled: true
+        },
+        panelConfig: {
+            botDescription: '餐后体验回访',
+            welcomeMessage: '您好',
+            uiMode: 'minimal',
+            theme: 'light',
+            acceptLabel: '接听',
+            rejectLabel: '挂断',
+            features: {
+                showChatBubbles: true,
+                showAvatar: true,
+                showMuteButton: true,
+                showMetrics: true,
+                showBubbleMetadata: true,
+                showSessionStatus: true,
+                showDetailsPanel: true
+            }
+        }
+    });
+
+    try {
+        var authHeader = await createAuthHeader('POST', '/api/v1/sessions', body);
+
+        var resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader,
+                'X-API-Key': CALL_API_KEY
+            },
+            body: body
+        });
+
+        if (!resp.ok) {
+            var errText = await resp.text();
+            throw new Error('HTTP ' + resp.status + ': ' + errText.slice(0, 200));
+        }
+
+        var data = await resp.json();
+
+        if (!data.callUrl) {
+            throw new Error('返回数据缺少 callUrl');
+        }
+
+        var jumpUrl = data.callUrl + '&debug=true';
+        window.location.replace(jumpUrl);
+
+    } catch (err) {
+        console.error('创建通话失败:', err);
+        alert('创建通话失败: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '☎️ 创建对话';
+    }
 }
 
 // ============================================================
