@@ -52,6 +52,8 @@ API Key.txt
 
 ## Test / Demo artifacts
 demo-*.json
+latest_response.json
+req_body.json
 request_body.json
 
 ## Local development overrides

@@ -8,13 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +25,8 @@ import java.util.Map;
  * 接收小票照片 base64，直接调用 OpenRouter Vision API 解析为结构化 OrderData。
  * <p>
  * photoBase64 为空时（预览模式），返回预设 fallback 订单数据。
+ * <p>
+ * 使用 JDK HttpClient 替代 RestTemplate，显著减少大请求体（800KB+ base64）的传输耗时。
  */
 @Component
 @ConditionalOnProperty(name = "moka.llm.mock", havingValue = "false")
@@ -45,7 +47,7 @@ public class RealOrderUnderstandingService implements OrderUnderstandingService 
             - 菜品名称从照片如实提取
             """;
 
-    private final RestTemplate restTemplate;
+    private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String baseUrl;
@@ -56,7 +58,10 @@ public class RealOrderUnderstandingService implements OrderUnderstandingService 
             @Value("${moka.openrouter.base-url}") String baseUrl,
             @Value("${moka.openrouter.vision-model}") String modelName,
             ObjectMapper objectMapper) {
-        this.restTemplate = new RestTemplate();
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
         this.objectMapper = objectMapper;
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
@@ -73,7 +78,7 @@ public class RealOrderUnderstandingService implements OrderUnderstandingService 
         try {
             String dataUri = "data:image/jpeg;base64," + photoBase64;
 
-            // 构建 OpenRouter API 请求体
+            // 构建请求体 JSON
             Map<String, Object> requestBody = Map.of(
                     "model", modelName,
                     "messages", List.of(
@@ -86,21 +91,27 @@ public class RealOrderUnderstandingService implements OrderUnderstandingService 
                     "temperature", 0.1,
                     "max_tokens", 2000
             );
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", "Bearer " + apiKey);
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+            // 构建 HTTP 请求
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/chat/completions"))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofMinutes(3))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
 
             log.info("调用视觉模型解析小票...");
             long start = System.currentTimeMillis();
-            ResponseEntity<String> rawResponse = restTemplate.postForEntity(
-                    baseUrl + "/chat/completions", request, String.class);
+
+            HttpResponse<String> rawResponse = httpClient.send(request,
+                    HttpResponse.BodyHandlers.ofString());
+
             long elapsed = System.currentTimeMillis() - start;
 
             // 解析响应
-            JsonNode root = objectMapper.readTree(rawResponse.getBody());
+            JsonNode root = objectMapper.readTree(rawResponse.body());
             String content = root.path("choices").get(0).path("message").path("content").asText().trim();
             log.info("视觉模型响应（{}ms），长度: {} 字符", elapsed, content.length());
 

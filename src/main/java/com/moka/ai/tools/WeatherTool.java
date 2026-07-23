@@ -10,6 +10,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * 实时天气信息获取工具。
@@ -25,6 +26,20 @@ public class WeatherTool {
 
     private static final Logger log = LoggerFactory.getLogger(WeatherTool.class);
     private static final String WTTR_URL = "https://wttr.in/%s?format=%%C:+%%t+%%w&lang=zh";
+
+    /** 高德 API 要求用行政区代码（adcode）而非城市名查询，此处映射常用城市 */
+    private static final Map<String, String> CITY_ADCODES = Map.of(
+            "北京", "110000",
+            "上海", "310000",
+            "广州", "440100",
+            "深圳", "440300",
+            "天津", "120000",
+            "重庆", "500000",
+            "杭州", "330100",
+            "成都", "510100",
+            "武汉", "420100",
+            "南京", "320100"
+    );
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -71,10 +86,36 @@ public class WeatherTool {
     public String getDistrictWeather(String district, String cityFallback) {
         try {
             String gaodeCity = district.contains("区") ? cityFallback : district;
-            String encodedCity = URLEncoder.encode(gaodeCity, StandardCharsets.UTF_8);
-            String urlStr = gaodeBaseUrl + "/weather/weatherInfo?city=" + encodedCity + "&key=" + gaodeKey;
 
-            // 使用 JDK HttpClient
+            // 尝试用城市名查询
+            String result = tryGaodeQuery(gaodeCity);
+            if (result != null) return result;
+
+            // 城市名查不到时，尝试用 adcode（行政区代码）查询
+            String adcode = CITY_ADCODES.get(cityFallback);
+            if (adcode != null) {
+                log.debug("城市名查询无结果，尝试 adcode: {}={}", cityFallback, adcode);
+                result = tryGaodeQuery(adcode);
+                if (result != null) return result;
+            }
+
+            log.warn("高德天气返回异常，降级到 wttr.in: district={}", district);
+            return getWeather(cityFallback);
+
+        } catch (Exception e) {
+            log.warn("高德天气 API 调用失败，降级到 wttr.in: {}", e.getMessage());
+            return getWeather(cityFallback);
+        }
+    }
+
+    /**
+     * 执行一次高德天气查询，成功返回格式化字符串，失败返回 null。
+     */
+    private String tryGaodeQuery(String cityParam) {
+        try {
+            String encoded = URLEncoder.encode(cityParam, StandardCharsets.UTF_8);
+            String urlStr = gaodeBaseUrl + "/weather/weatherInfo?city=" + encoded + "&key=" + gaodeKey;
+
             var httpClient = java.net.http.HttpClient.newHttpClient();
             var request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create(urlStr))
@@ -95,16 +136,13 @@ public class WeatherTool {
                         String temp = live.path("temperature").asText("?");
                         String windDir = live.path("winddirection").asText();
                         String windPower = live.path("windpower").asText();
-                        return String.format("%s：%s %s°C %s风%s级", gaodeCity, weather, temp, windDir, windPower);
+                        return String.format("%s：%s %s°C %s风%s级", cityParam, weather, temp, windDir, windPower);
                     }
                 }
             }
-            log.warn("高德天气返回异常，降级到 wttr.in: district={}", district);
-            return getWeather(cityFallback);
-
         } catch (Exception e) {
-            log.warn("高德天气 API 调用失败，降级到 wttr.in: {}", e.getMessage());
-            return getWeather(cityFallback);
+            log.debug("高德查询失败(cityParam={}): {}", cityParam, e.getMessage());
         }
+        return null;
     }
 }

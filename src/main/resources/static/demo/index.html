@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moka Agent · Demo Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
+
+    <!-- ========== Header ========== -->
+    <header id="header" class="border-b border-gray-800 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center gap-3">
+            <span class="text-2xl">☕</span>
+            <h1 class="text-xl font-semibold text-gray-100">Moka Agent · Demo Console</h1>
+            <span class="text-sm text-gray-500 ml-auto">餐后体验回访 AI Pipeline</span>
+        </div>
+    </header>
+
+    <!-- ========== Step Indicator ========== -->
+    <nav id="step-indicator" class="border-b border-gray-800 px-6 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-center gap-4 text-sm">
+            <span id="step-1" class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+                订单输入与解析
+            </span>
+            <span class="text-gray-600 text-lg">→</span>
+            <span id="step-2" class="flex items-center gap-2 text-gray-600">
+                <span class="w-7 h-7 rounded-full bg-gray-800 text-gray-500 flex items-center justify-center text-xs font-bold">2</span>
+                AI 推理链路
+            </span>
+        </div>
+    </nav>
+
+    <!-- ========== Main Content ========== -->
+    <main class="flex-1 max-w-7xl mx-auto w-full px-6 py-6">
+
+        <!-- ======================== Page 1 ======================== -->
+        <div id="page1" class="flex flex-col xl:flex-row gap-6">
+
+            <!-- Left: Upload Area -->
+            <section id="upload-area" class="xl:w-96 flex-shrink-0">
+                <div class="bg-gray-900 border-2 border-dashed border-gray-700 rounded-xl p-6 text-center
+                            transition-colors hover:border-gray-500" id="drop-zone">
+                    <div class="text-4xl mb-3">📸</div>
+                    <p class="text-gray-400 text-sm mb-4">
+                        将小票照片拖到此处<br>或点击选择
+                    </p>
+                    <input type="file" id="file-input" accept="image/*" class="hidden">
+                    <button id="upload-btn"
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500
+                                   disabled:cursor-not-allowed text-white font-medium py-2.5 px-4 rounded-lg transition"
+                            disabled>
+                        开始解析订单
+                    </button>
+                    <p id="progress-text" class="mt-3 text-sm text-gray-500 min-h-[1.25rem]"></p>
+                </div>
+            </section>
+
+            <!-- Right: Result Panel -->
+            <section id="result-panel" class="flex-1 grid grid-cols-1 gap-4">
+
+                <!-- B1: Order Info -->
+                <div id="order-card" class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-5">
+                    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">🧾 订单信息</h2>
+                    <div id="order-content" class="text-gray-500 text-sm">等待上传...</div>
+                </div>
+
+                <!-- B2: Dish Knowledge -->
+                <div id="dish-card" class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-5">
+                    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">📖 菜品知识</h2>
+                    <div id="dish-content" class="text-gray-500 text-sm">等待上传...</div>
+                </div>
+
+                <!-- B3: Realtime Info -->
+                <div id="realtime-card" class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-5">
+                    <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">🌤️ 实时环境</h2>
+                    <div id="realtime-content" class="text-gray-500 text-sm">等待上传...</div>
+                </div>
+
+            </section>
+        </div>
+
+        <!-- Page 1 Bottom Buttons -->
+        <div id="page1-buttons" class="flex justify-between mt-6">
+            <button id="reset-btn"
+                    class="px-5 py-2 rounded-lg border border-gray-700 text-gray-400
+                           hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    disabled>
+                ← 重置
+            </button>
+            <button id="next-btn"
+                    class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium
+                           disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition"
+                    disabled>
+                → AI 推理链路
+            </button>
+        </div>
+
+        <!-- ======================== Page 2 ======================== -->
+        <div id="page2" class="hidden flex flex-col gap-4">
+
+            <!-- C1: Experience Understanding -->
+            <div id="experience-box" class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-5 opacity-0 transition-opacity duration-500">
+                <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">🤖 体验理解</h2>
+                <div id="experience-list" class="space-y-3">
+                    <p class="text-gray-500 text-sm">等待上传...</p>
+                </div>
+            </div>
+
+            <!-- Arrow 1 -->
+            <div id="arrow1" class="text-center text-gray-600 text-2xl opacity-0 transition-opacity duration-500">↓</div>
+
+            <!-- C2: Conversation Plan -->
+            <div id="plan-box" class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-5 opacity-0 transition-opacity duration-500">
+                <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">📋 对话规划</h2>
+                <div id="plan-content">
+                    <p class="text-gray-500 text-sm">等待上传...</p>
+                </div>
+            </div>
+
+            <!-- Arrow 2 -->
+            <div id="arrow2" class="text-center text-gray-600 text-2xl opacity-0 transition-opacity duration-500">↓</div>
+
+            <!-- C3: Runtime Prompt -->
+            <div id="prompt-box" class="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-5 opacity-0 transition-opacity duration-500">
+                <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">📄 Runtime Prompt</h2>
+                <pre id="prompt-code" class="bg-gray-950 border border-gray-800 rounded-lg p-4 text-sm font-mono text-gray-400
+                                           overflow-auto max-h-96 whitespace-pre-wrap">等待上传...</pre>
+                <div id="prompt-meta" class="mt-2 text-xs text-gray-600"></div>
+            </div>
+
+            <!-- Page 2 Bottom Buttons -->
+            <div id="page2-buttons" class="flex justify-between mt-2">
+                <button id="back-btn"
+                        class="px-5 py-2 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800 transition">
+                    ← 返回
+                </button>
+                <button id="call-btn"
+                        class="px-5 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-500
+                               cursor-not-allowed transition">
+                    ☎️ 创建对话
+                </button>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- ========== Footer ========== -->
+    <footer id="footer" class="border-t border-gray-800 px-6 py-3 text-center text-xs text-gray-600">
+        Moka Agent · 餐后体验回访 AI &copy; 2026
+    </footer>
+
+    <script src="app.js?v=2"></script>
+</body>
+</html>

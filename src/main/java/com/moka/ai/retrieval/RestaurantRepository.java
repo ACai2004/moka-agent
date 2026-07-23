@@ -10,8 +10,10 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 餐厅信息仓库。
@@ -70,6 +72,21 @@ public class RestaurantRepository {
             String rName = r.restaurantName().toLowerCase().replaceAll("[·•\\s]", "");
             // 双向包含检测
             if (normalized.contains(rName) || rName.contains(normalized)) {
+                return Optional.of(r);
+            }
+
+            // 字符重叠度兜底：共同字符数 / 较短名字长度 >= 50%
+            Set<Character> normChars = new HashSet<>();
+            Set<Character> restChars = new HashSet<>();
+            for (char c : normalized.toCharArray()) normChars.add(c);
+            for (char c : rName.toCharArray()) restChars.add(c);
+            normChars.retainAll(restChars);
+            int commonCount = normChars.size();
+            int minLen = Math.min(normalized.length(), rName.length());
+            if (minLen > 0 && (double) commonCount / minLen >= 0.5) {
+                log.debug("字符重叠度匹配: {} (归一化) ~ {} (数据库), 重叠={}/{}={}%",
+                        normalized, rName, commonCount, minLen,
+                        String.format("%.0f", (double) commonCount / minLen * 100));
                 return Optional.of(r);
             }
         }
