@@ -32,7 +32,7 @@ server:
 
 moka:
   llm:
-    mock: true
+    mock: false
 
   deepseek:
     api-key: ${DEEPSEEK_API_KEY}
