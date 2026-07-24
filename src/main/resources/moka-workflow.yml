@@ -1,0 +1,9 @@
+moka:
+  workflow:
+    nodes:
+      - OrderNode
+      - DishNode
+      - RealtimeNode
+      - ExperienceNode
+      - PlannerNode
+      - AssemblyNode

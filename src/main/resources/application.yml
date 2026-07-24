@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: classpath:moka-workflow.yml
   application:
     name: moka-agent
 

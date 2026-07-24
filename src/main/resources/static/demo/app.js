@@ -410,7 +410,7 @@ async function handleFileUpload(file) {
     setTimeout(() => {
         if (state.isUploading) {
             state.uploadStatus = 'identifying';
-            renderProgress('\u{1F50D} 视觉模型识别中...    （通常需要 60-90 秒）');
+            renderProgress('\u{1F50D} 视觉模型识别中...');
         }
     }, 800);
 
@@ -680,13 +680,13 @@ async function createCallAndJump() {
         userId: userId,
         redirectUrl: redirectUrl,
         botConfig: {
-            botName: '餐后体验回访 AI',
+            botName: '餐后漫谈AI',
             systemPrompt: state.runtimePrompt.finalPrompt,
             speakingStyle: '语速适中，语调亲切，像真人客服一样自然',
             speaker: 'sweet-female',
             provider: 'volcano-rtc',
             welcomeMessage: '您好',
-            openingLine: '您好，我是餐后体验回访助手，想和您聊聊刚才的用餐体验',
+            openingLine: '',
             idleConfig: {
                 enabled: true,
                 timeoutSeconds: 30,
@@ -705,7 +705,7 @@ async function createCallAndJump() {
             bargeInEnabled: true
         },
         panelConfig: {
-            botDescription: '餐后体验回访',
+            botDescription: '餐后漫谈',
             welcomeMessage: '您好',
             uiMode: 'minimal',
             theme: 'light',

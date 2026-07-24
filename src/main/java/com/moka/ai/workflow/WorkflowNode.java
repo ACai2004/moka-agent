@@ -1,6 +1,7 @@
 package com.moka.ai.workflow;
 
 import com.moka.ai.context.WorkflowContext;
+import java.util.List;
 
 /**
  * Workflow 节点接口。
@@ -23,4 +24,14 @@ public interface WorkflowNode {
 
     /** 可选节点失败时的降级处理 */
     default WorkflowContext fallback(WorkflowContext ctx) { return ctx; }
+
+    /**
+     * 声明此节点依赖哪些前置节点的输出。
+     * 用于启动时校验配置的节点顺序是否满足数据依赖。
+     * 返回空列表表示起始节点。
+     * <p>
+     * 例：ExperienceNode 依赖 OrderNode、DishNode、RealtimeNode，
+     * 则返回 List.of("OrderNode", "DishNode", "RealtimeNode")
+     */
+    default List<String> dependsOn() { return List.of(); }
 }
