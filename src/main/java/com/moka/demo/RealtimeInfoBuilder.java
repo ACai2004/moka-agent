@@ -8,6 +8,7 @@ import com.moka.ai.retrieval.RestaurantRepository;
 import com.moka.ai.tools.WeatherTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -29,6 +30,7 @@ import java.util.Optional;
  * 3. 调 timor.tech API 判断节假日
  */
 @Component
+@Profile("demo")
 public class RealtimeInfoBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(RealtimeInfoBuilder.class);

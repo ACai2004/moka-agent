@@ -61,3 +61,20 @@ request_body.json
 
 ## Logs
 *.log
+
+## Docs / Design documents (not submitted to main business)
+ARCHITECTURE.md
+MVP-BUILD-PLAN.md
+docs/*.md
+
+## Root-level dev notes (Chinese)
+/创建对话按钮-技术对接计划.md
+/前端演示Demo-技术搭建计划.md
+/前端演示demo.md
+/前端上传图片压缩-技术计划.md
+
+## Test pages
+/test-call.html
+
+## IDE - personal workspace state
+.idea/claudeCodeTabState.xml

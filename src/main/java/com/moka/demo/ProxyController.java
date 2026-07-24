@@ -1,5 +1,6 @@
 package com.moka.demo;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
  */
 @RestController
 @RequestMapping("/api/v1/proxy")
+@Profile("demo")
 public class ProxyController {
 
     private static final String TARGET_URL = "https://voice-dialog.bangbangyouxin.cn/api/v1/sessions";
