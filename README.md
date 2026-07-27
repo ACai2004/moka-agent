@@ -58,7 +58,11 @@ The system runs a 6-step orchestrated pipeline (sequence configurable via `moka-
 ```
 Receipt Photo → OCR parsing → Dish matching → Weather/Time context
 → Experience reasoning → Conversation planning → Runtime prompt
+→ Voice engine → Outbound call
 ```
+
+The pre-call pipeline (steps 1–6) runs in this service.  
+The generated prompt is then sent to a voice engine (e.g. 火山引擎/Volcengine) to initiate the actual outbound call — that step is handled externally.
 
 ## API Endpoints
 
