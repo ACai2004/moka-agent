@@ -71,20 +71,9 @@ public class WeatherTool {
     public String getDistrictWeather(String district, String cityFallback) {
         try {
             String gaodeCity = district.contains("区") ? cityFallback : district;
-            String encodedCity = URLEncoder.encode(gaodeCity, StandardCharsets.UTF_8);
-            String urlStr = gaodeBaseUrl + "/weather/weatherInfo?city=" + encodedCity + "&key=" + gaodeKey;
-
-            // 使用 JDK HttpClient
-            var httpClient = java.net.http.HttpClient.newHttpClient();
-            var request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(urlStr))
-                    .header("User-Agent", "Mozilla/5.0")
-                    .GET()
-                    .timeout(java.time.Duration.ofSeconds(10))
-                    .build();
-            var httpResp = httpClient.send(request,
-                    java.net.http.HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            String response = httpResp.body();
+            // 使用 RestTemplate URI 模板变量（自动处理编码，避免 double-encode）
+            String urlStr = gaodeBaseUrl + "/weather/weatherInfo?city={city}&key={key}";
+            String response = restTemplate.getForObject(urlStr, String.class, gaodeCity, gaodeKey);
 
             if (response != null && !response.isBlank()) {
                 JsonNode root = objectMapper.readTree(response);
