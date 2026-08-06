@@ -34,6 +34,10 @@ moka:
   llm:
     mock: false
 
+  api:
+    app-key: ${MOKA_APP_KEY:mantan-app}
+    app-secret: ${MOKA_APP_SECRET:mantan-secret}
+
   deepseek:
     api-key: ${DEEPSEEK_API_KEY}
     base-url: https://api.deepseek.com
