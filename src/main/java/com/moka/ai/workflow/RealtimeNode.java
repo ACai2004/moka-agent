@@ -50,15 +50,23 @@ public class RealtimeNode implements WorkflowNode {
         String weather;
         String cityFallback = "北京";
 
-        // 根据餐厅名查找地址，提取区/城市
-        Optional<RestaurantProfile> restaurant = restaurantRepository.findByName(restaurantName);
-        if (restaurant.isPresent() && restaurant.get().address() != null) {
-            String addr = restaurant.get().address();
-            String district = extractDistrict(addr);
-            cityFallback = extractCity(addr);
+        // 优先使用业务系统传入的区/城市（漫谈不存储餐厅数据）
+        String district = ctx.getDistrict();
+        String city = ctx.getCity();
+        if (district != null && !district.isBlank() && city != null && !city.isBlank()) {
+            cityFallback = city;
             weather = weatherTool.getDistrictWeather(district, cityFallback);
         } else {
-            weather = weatherTool.getWeather(cityFallback);
+            // 兜底：从漫谈本地餐厅库查地址解析（demo 路径）
+            Optional<RestaurantProfile> restaurant = restaurantRepository.findByName(restaurantName);
+            if (restaurant.isPresent() && restaurant.get().address() != null) {
+                String addr = restaurant.get().address();
+                district = extractDistrict(addr);
+                cityFallback = extractCity(addr);
+                weather = weatherTool.getDistrictWeather(district, cityFallback);
+            } else {
+                weather = weatherTool.getWeather(cityFallback);
+            }
         }
 
         // 当前时间

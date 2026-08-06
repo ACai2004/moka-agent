@@ -56,11 +56,21 @@ public class ContextPreparationWorkflow {
      * @return 完整的 Runtime Prompt
      */
     public RuntimePrompt execute(String photoBase64) {
-        log.info("===== ContextPreparationWorkflow 开始 =====");
-        long start = System.currentTimeMillis();
-
         WorkflowContext ctx = new WorkflowContext();
         ctx.setPhotoBase64(photoBase64);
+        return execute(ctx);
+    }
+
+    /**
+     * 执行完整 Workflow，生成 Runtime Prompt。
+     * 支持预构建的 WorkflowContext（业务系统传入订单 / 菜品知识 / 定位 / 氛围服务等）。
+     *
+     * @param ctx 已填充输入数据的上下文
+     * @return 完整的 Runtime Prompt
+     */
+    public RuntimePrompt execute(WorkflowContext ctx) {
+        log.info("===== ContextPreparationWorkflow 开始 =====");
+        long start = System.currentTimeMillis();
 
         for (WorkflowNode node : nodes) {
             try {

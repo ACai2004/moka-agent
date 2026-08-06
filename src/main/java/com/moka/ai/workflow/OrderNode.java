@@ -36,9 +36,15 @@ public class OrderNode implements WorkflowNode {
 
     @Override
     public WorkflowContext execute(WorkflowContext ctx) {
-        OrderData order = orderService.analyzeOrder(ctx.getPhotoBase64());
+        OrderData order = ctx.getOrder();
+        if (order == null) {
+            // 业务系统未传入订单：走视觉识别（demo 路径）
+            order = orderService.analyzeOrder(ctx.getPhotoBase64());
+        } else {
+            log.info("[OrderNode] 使用外部传入订单（跳过视觉识别）: {}", order.restaurant());
+        }
 
-        // 餐厅名校正（用数据库中的规范名覆盖 OCR 识别结果）
+        // 餐厅名校正（用数据库中的规范名覆盖 OCR 识别结果；漫谈本地无该餐厅数据时保持原样）
         String matchedName = restaurantRepository.findByName(order.restaurant())
                 .map(RestaurantProfile::restaurantName)
                 .orElse(null);

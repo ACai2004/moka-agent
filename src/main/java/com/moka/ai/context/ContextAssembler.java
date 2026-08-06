@@ -52,16 +52,19 @@ public class ContextAssembler {
         sb.append("--- 用餐信息 ---\n");
         sb.append("餐厅：").append(order.restaurant()).append("\n");
 
-        // 餐厅环境与服务信息
+        // 餐厅环境与服务信息：优先用业务系统传入的，否则查漫谈本地餐厅库（demo 路径）
         Optional<RestaurantProfile> restaurant = restaurantRepository.findByName(order.restaurant());
-        if (restaurant.isPresent()) {
-            RestaurantProfile profile = restaurant.get();
-            if (profile.environmentFeatures() != null && !profile.environmentFeatures().isEmpty()) {
-                sb.append("氛围：").append(String.join("、", profile.environmentFeatures())).append("\n");
-            }
-            if (profile.serviceFeatures() != null && !profile.serviceFeatures().isEmpty()) {
-                sb.append("服务：").append(String.join("、", profile.serviceFeatures())).append("\n");
-            }
+        List<String> envFeatures = (ctx.getEnvironmentFeatures() != null && !ctx.getEnvironmentFeatures().isEmpty())
+                ? ctx.getEnvironmentFeatures()
+                : (restaurant.isPresent() ? restaurant.get().environmentFeatures() : null);
+        if (envFeatures != null && !envFeatures.isEmpty()) {
+            sb.append("氛围：").append(String.join("、", envFeatures)).append("\n");
+        }
+        List<String> svcFeatures = (ctx.getServiceFeatures() != null && !ctx.getServiceFeatures().isEmpty())
+                ? ctx.getServiceFeatures()
+                : (restaurant.isPresent() ? restaurant.get().serviceFeatures() : null);
+        if (svcFeatures != null && !svcFeatures.isEmpty()) {
+            sb.append("服务：").append(String.join("、", svcFeatures)).append("\n");
         }
 
         sb.append("时间：").append(order.time()).append("\n");

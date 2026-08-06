@@ -32,6 +32,12 @@ public class DishNode implements WorkflowNode {
 
     @Override
     public WorkflowContext execute(WorkflowContext ctx) {
+        // 业务系统已随订单传入菜品知识（含特点/体验标签/角色）时，直接使用，跳过内部匹配
+        if (ctx.getDishes() != null && !ctx.getDishes().isEmpty()) {
+            log.info("[DishNode] 使用外部传入的菜品知识（{} 道），跳过内部匹配", ctx.getDishes().size());
+            return ctx;
+        }
+
         List<String> dishNames = ctx.getOrder().items().stream()
                 .map(DishItem::name)
                 .collect(Collectors.toList());

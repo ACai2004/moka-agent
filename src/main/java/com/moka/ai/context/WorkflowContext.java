@@ -18,6 +18,12 @@ public class WorkflowContext {
     // === 原始输入 ===
     private String photoBase64;
 
+    // === 外部传入的餐厅信息（业务系统提供，漫谈不存储） ===
+    private String district;
+    private String city;
+    private List<String> environmentFeatures;
+    private List<String> serviceFeatures;
+
     // === Layer 1：原始事实 ===
     private OrderData order;
     private List<DishKnowledge> dishes;
@@ -41,6 +47,22 @@ public class WorkflowContext {
     public String getPhotoBase64() { return photoBase64; }
     public void setPhotoBase64(String photoBase64) { this.photoBase64 = photoBase64; }
     public WorkflowContext withPhotoBase64(String photoBase64) { this.photoBase64 = photoBase64; return this; }
+
+    public String getDistrict() { return district; }
+    public void setDistrict(String district) { this.district = district; }
+    public WorkflowContext withDistrict(String district) { this.district = district; return this; }
+
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+    public WorkflowContext withCity(String city) { this.city = city; return this; }
+
+    public List<String> getEnvironmentFeatures() { return environmentFeatures; }
+    public void setEnvironmentFeatures(List<String> environmentFeatures) { this.environmentFeatures = environmentFeatures; }
+    public WorkflowContext withEnvironmentFeatures(List<String> environmentFeatures) { this.environmentFeatures = environmentFeatures; return this; }
+
+    public List<String> getServiceFeatures() { return serviceFeatures; }
+    public void setServiceFeatures(List<String> serviceFeatures) { this.serviceFeatures = serviceFeatures; }
+    public WorkflowContext withServiceFeatures(List<String> serviceFeatures) { this.serviceFeatures = serviceFeatures; return this; }
 
     public OrderData getOrder() { return order; }
     public void setOrder(OrderData order) { this.order = order; }
