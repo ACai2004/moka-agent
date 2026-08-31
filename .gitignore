@@ -53,6 +53,11 @@ API Key.txt
 ## Test / Demo artifacts
 demo-*.json
 request_body.json
+latest_response.json
+req_body.json
+demo-prompt.json
+demo-prompt-result.json
+demo-response.json
 
 ## Local development overrides
 *.local.yml
